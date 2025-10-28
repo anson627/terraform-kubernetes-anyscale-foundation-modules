@@ -36,16 +36,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
   #########################################################################
   default_node_pool {
     name            = "sys"
-    vm_size         = "Standard_D2s_v5"
+    vm_size         = "Standard_D16ds_v5"
     vnet_subnet_id  = azurerm_subnet.nodes.id
     os_disk_size_gb = 64
     type            = "VirtualMachineScaleSets"
-
-    # autoscaler
-    auto_scaling_enabled = true
-    min_count            = 1
-    max_count            = 3
-
+    node_count      = 3
   }
 
   #########################################################################
@@ -57,180 +52,31 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   network_profile {
     network_plugin = "azure"
-    network_policy = "azure"
   }
 
   tags = var.tags
 }
 
 ###############################################################################
-# CPU NODE POOL (Standard_D16s_v5) OnDemand
+# CPU NODE POOL (Standard_D16s_v3) OnDemand
 ###############################################################################
 resource "azurerm_kubernetes_cluster_node_pool" "ondemand_cpu" {
 
   #checkov:skip=CKV_AZURE_168: "Ensure Azure Kubernetes Cluster (AKS) nodes should use a minimum number of 50 pods"
   #checkov:skip=CKV_AZURE_227: "Ensure that the AKS cluster encrypt temp disks, caches, and data flows between Compute and Storage resources"
 
-  name                  = "cpu16"
+  name                  = "user"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
 
-  vm_size        = "Standard_D16s_v5"
+  vm_size        = "Standard_D16_v3"
   mode           = "User"
   vnet_subnet_id = azurerm_subnet.nodes.id
 
-  auto_scaling_enabled = true
-  min_count            = 0
-  max_count            = 10
+  node_count            = 3
 
   node_taints = [
     "node.anyscale.com/capacity-type=ON_DEMAND:NoSchedule"
   ]
-
-  tags = var.tags
-}
-
-###############################################################################
-# CPU NODE POOL (Standard_D16s_v5) Spot
-###############################################################################
-resource "azurerm_kubernetes_cluster_node_pool" "spot_cpu" {
-
-  #checkov:skip=CKV_AZURE_168: "Ensure Azure Kubernetes Cluster (AKS) nodes should use a minimum number of 50 pods"
-  #checkov:skip=CKV_AZURE_227: "Ensure that the AKS cluster encrypt temp disks, caches, and data flows between Compute and Storage resources"
-
-  name                  = "cpu16spot"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-
-  vm_size        = "Standard_D16s_v5"
-  mode           = "User"
-  vnet_subnet_id = azurerm_subnet.nodes.id
-
-  auto_scaling_enabled = true
-  min_count            = 0
-  max_count            = 10
-
-  node_taints = [
-    "node.anyscale.com/capacity-type=SPOT:NoSchedule"
-  ]
-
-  priority        = "Spot"
-  eviction_policy = "Delete"
-
-  tags = var.tags
-}
-
-locals {
-  gpu_pool_configs = {
-    T4 = {
-      name         = "gput4"
-      vm_size      = "Standard_NC16as_T4_v3"
-      product_name = "NVIDIA-T4"
-      gpu_count    = "1"
-    }
-    A10 = {
-      name         = "gpua10"
-      vm_size      = "Standard_NV36ads_A10_v5"
-      product_name = "NVIDIA-A10"
-      gpu_count    = "1"
-    }
-    A100 = {
-      name         = "gpua100"
-      vm_size      = "Standard_NC24ads_A100_v4"
-      product_name = "NVIDIA-A100"
-      gpu_count    = "1"
-    }
-    H100 = {
-      name         = "gpuh100x8"
-      vm_size      = "Standard_ND96isr_H100_v5"
-      product_name = "NVIDIA-H100"
-      gpu_count    = "8"
-    }
-  }
-
-  # keep only the types the caller asked for
-  selected_gpu_pools = {
-    for k, v in local.gpu_pool_configs :
-    k => v if contains(var.node_group_gpu_types, k)
-  }
-}
-
-###############################################################################
-# GPU Node POOL (Standard_NC16as_T4_v3) OnDemand
-###############################################################################
-
-#trivy:ignore:avd-azu-0168
-#trivy:ignore:avd-azu-0227
-resource "azurerm_kubernetes_cluster_node_pool" "gpu_ondemand" {
-  #checkov:skip=CKV_AZURE_168
-  #checkov:skip=CKV_AZURE_227
-
-  for_each = local.selected_gpu_pools
-
-  name                  = each.value.name
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-
-  vm_size        = each.value.vm_size
-  mode           = "User"
-  vnet_subnet_id = azurerm_subnet.nodes.id
-
-  # ── autoscaling (shared across all pools) ───────────────────────────────────
-  auto_scaling_enabled = true
-  min_count            = 0
-  max_count            = 10
-
-  upgrade_settings { max_surge = "1" }
-
-  # ── labels & taints ────────────────────────────────────────────────────────
-  node_labels = {
-    "nvidia.com/gpu.product" = each.value.product_name
-    "nvidia.com/gpu.count"   = each.value.gpu_count
-  }
-
-  node_taints = [
-    "node.anyscale.com/capacity-type=ON_DEMAND:NoSchedule",
-    "nvidia.com/gpu=present:NoSchedule",
-    "node.anyscale.com/accelerator-type=GPU:NoSchedule",
-  ]
-
-  tags = var.tags
-}
-
-###############################################################################
-# GPU Node POOL (Standard_NC16as_T4_v3) Spot
-###############################################################################
-#trivy:ignore:avd-azu-0168
-#trivy:ignore:avd-azu-0227
-resource "azurerm_kubernetes_cluster_node_pool" "gpu_spot" {
-  #checkov:skip=CKV_AZURE_168
-  #checkov:skip=CKV_AZURE_227
-
-  for_each = local.selected_gpu_pools
-
-  name                  = "${each.value.name}spot"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-
-  vm_size        = each.value.vm_size
-  mode           = "User"
-  vnet_subnet_id = azurerm_subnet.nodes.id
-
-  # ── autoscaling (shared across all pools) ───────────────────────────────────
-  auto_scaling_enabled = true
-  min_count            = 0
-  max_count            = 10
-
-  # ── labels & taints ────────────────────────────────────────────────────────
-  node_labels = {
-    "nvidia.com/gpu.product" = each.value.product_name
-    "nvidia.com/gpu.count"   = each.value.gpu_count
-  }
-
-  node_taints = [
-    "node.anyscale.com/capacity-type=ON_DEMAND:NoSchedule",
-    "nvidia.com/gpu=present:NoSchedule",
-    "node.anyscale.com/accelerator-type=GPU:NoSchedule",
-  ]
-
-  priority        = "Spot"
-  eviction_policy = "Delete"
 
   tags = var.tags
 }
