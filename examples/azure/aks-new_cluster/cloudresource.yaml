@@ -1,0 +1,10 @@
+name: k8s-azure-eastus
+provider: AZURE
+compute_stack: K8S
+region: eastus
+object_storage:
+   bucket_name: azure://aks-multi-region-blob
+file_storage:
+  file_storage_id: https://aksmultiregionsa.blob.core.windows.net
+kubernetes_config:
+  anyscale_operator_iam_identity: 201dc0b1-1e0f-41e6-8c77-07f979faa0da

@@ -4,7 +4,7 @@ affinity:
       nodeSelectorTerms:
       - matchExpressions:
         # We allow a GPU deployment to be forced by setting the following label to "true"
-        - key: "nvidia.com/gpu.product"
+        - key: "kubernetes.azure.com/accelerator"
           operator: Exists
 tolerations:
   - key: nvidia.com/gpu

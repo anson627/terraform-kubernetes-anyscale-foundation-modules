@@ -96,7 +96,7 @@ helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
 helm upgrade nvdp nvdp/nvidia-device-plugin \
   --namespace nvidia-device-plugin \
   --version 0.17.1 \
-  --values values_nvdp.yaml \
+  --values sample-values_nvdp.yaml \
   --create-namespace \
   --install
 ```
@@ -107,16 +107,16 @@ Ensure that you are logged into Anyscale with valid CLI credentials. (`anyscale 
 
 You will need an Anyscale platform API Key for the helm chart installation. You can generate one from the [Anyscale Web UI](https://console.anyscale.com/api-keys).
 
-1. Using the output from the Terraform modules, register the Anyscale Cloud. It should look sonething like:
+1. Using the output from the Terraform modules, register the Anyscale Cloud. It should look something like:
 
 ```shell
 anyscale cloud register \
-  --name <name> \
-  --region <region> \
+  --name aks-multi-region \
+  --region eastus2 \
   --provider azure \
   --compute-stack k8s \
-  --cloud-storage-bucket-name 'azure://<blog-storage-name>' \
-  --cloud-storage-bucket-endpoint 'https://<storage-account>.blob.core.windows.net'
+  --cloud-storage-bucket-name 'azure://aks-multi-region-blob' \
+  --cloud-storage-bucket-endpoint 'https://aksmultiregionsa.blob.core.windows.net'
 ```
 
 2. Note the Cloud Deployment ID which will be used in the next step. The Anyscale CLI will return it as one of the outputs. Example:
@@ -127,22 +127,21 @@ Output
 
 ### Install the Anyscale Operator
 
-Using the output from the Terraform modules, install the Anyscale Operator on the AKS Cluster. It should look someting like:
+Using the output from the Terraform modules, install the Anyscale Operator on the AKS Cluster. It should look something like:
 
 ```shell
-
 helm repo add anyscale https://anyscale.github.io/helm-charts
 helm repo update
 
 helm upgrade anyscale-operator anyscale/anyscale-operator \
---set-string cloudDeploymentId=<cloud-deployment-id> \
---set-string cloudProvider=azure \
---set-string region=<region> \
---set-string operatorIamIdentity=<anyscale_operator_client_id> \
---set-string workloadServiceAccountName=anyscale-operator \
---namespace anyscale-operator \
---create-namespace \
--i
+  --set-string global.cloudDeploymentId=cldrsrc_si6emilxuqeuhthzftxr3yk55a  \
+  --set-string global.cloudProvider=azure \
+  --set-string global.auth.anyscaleCliToken=$ANYSCALE_CLI_TOKEN \
+  --set-string global.auth.iamIdentity=201dc0b1-1e0f-41e6-8c77-07f979faa0da \
+  --set-string workloads.serviceAccount.name=anyscale-operator \
+  --namespace anyscale-operator \
+  --create-namespace \
+  -i
 ```
 
 <!-- BEGIN_TF_DOCS -->
