@@ -146,9 +146,13 @@ for pool in $USER_POOLS; do
     --resource-group "$RESOURCE_GROUP" \
     --cluster-name "$AKS_CLUSTER_NAME" \
     --name "$pool" \
-    --node-count "$USER_POOL_COUNT" \
+    --enable-cluster-autoscaler \
+    --min-count 0 \
+    --max-count 3 \
     --node-vm-size "$USER_POOL_VM_SIZE" \
-    --labels node.anyscale.com/capacity-type=ON_DEMAND \
+    --labels node.anyscale.com/capacity-type=SPOT \
+    --priority Spot \
+    --node-taints node.anyscale.com/capacity-type=SPOT:NoSchedule \
     --tags "${TAGS// /,}"
 done
 
