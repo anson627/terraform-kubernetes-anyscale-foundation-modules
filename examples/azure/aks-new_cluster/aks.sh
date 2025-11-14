@@ -34,39 +34,50 @@ for kv in "${tag_items[@]}"; do
   tag_args+=("$kv")
 done
 
-# echo "==> 1. Resource Group"
-# az account set -s "$SUBSCRIPTION"
-# az group create --name "$RESOURCE_GROUP" --location "$LOCATION" "${tag_args[@]}"
+echo "==> 1. Resource Group"
+az account set -s "$SUBSCRIPTION"
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION" "${tag_args[@]}"
 
-# echo "==> 2. Storage Account + Container"
-# az storage account create \
-#   --name "$STORAGE_ACCOUNT" \
-#   --resource-group "$RESOURCE_GROUP" \
-#   --location "$LOCATION" \
-#   --sku Standard_LRS \
-#   --kind StorageV2 \
-#   --allow-blob-public-access false \
-#   "${tag_args[@]}"
+echo "==> 2. Storage Account + Container"
+az storage account create \
+  --name "$STORAGE_ACCOUNT" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --sku Standard_LRS \
+  --kind StorageV2 \
+  --allow-blob-public-access false \
+  "${tag_args[@]}"
 
-# az storage container create \
-#   --name "$STORAGE_CONTAINER" \
-#   --account-name "$STORAGE_ACCOUNT" \
-#   --public-access off >/dev/null
+az storage container create \
+  --name "$STORAGE_CONTAINER" \
+  --account-name "$STORAGE_ACCOUNT" \
+  --public-access off >/dev/null
 
-# echo "==> 3. User Assigned Identity"
-# IDENTITY_JSON=$(az identity create -g "$RESOURCE_GROUP" -n "$USER_IDENTITY_NAME" "${tag_args[@]}")
-IDENTITY_JSON=$(az identity show -g "$RESOURCE_GROUP" -n "$USER_IDENTITY_NAME")
+echo "==> 2a. Configure Blob Storage CORS"
+az storage cors clear --services blob --account-name "$STORAGE_ACCOUNT" >/dev/null || true
+az storage cors add \
+  --services blob \
+  --account-name "$STORAGE_ACCOUNT" \
+  --origins "https://console.anyscale.com" \
+  --methods GET \
+  --allowed-headers "*" \
+  --exposed-headers "" \
+  --max-age 600
+
+echo "==> 3. User Assigned Identity"
+IDENTITY_JSON=$(az identity create -g "$RESOURCE_GROUP" -n "$USER_IDENTITY_NAME" "${tag_args[@]}")
+# IDENTITY_JSON=$(az identity show -g "$RESOURCE_GROUP" -n "$USER_IDENTITY_NAME")
 IDENTITY_CLIENT_ID=$(echo "$IDENTITY_JSON" | jq -r '.clientId')
 IDENTITY_PRINCIPAL_ID=$(echo "$IDENTITY_JSON" | jq -r '.principalId')
 IDENTITY_ID=$(echo "$IDENTITY_JSON" | jq -r '.id')
 
-# echo "==> 4. Role Assignment (Blob Data Contributor)"
-# STORAGE_ACCOUNT_ID=$(az storage account show -g "$RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --query id -o tsv)
-# az role assignment create \
-#   --assignee-object-id "$IDENTITY_PRINCIPAL_ID" \
-#   --assignee-principal-type ServicePrincipal \
-#   --role "Storage Blob Data Contributor" \
-#   --scope "$STORAGE_ACCOUNT_ID" >/dev/null
+echo "==> 4. Role Assignment (Blob Data Contributor)"
+STORAGE_ACCOUNT_ID=$(az storage account show -g "$RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --query id -o tsv)
+az role assignment create \
+  --assignee-object-id "$IDENTITY_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" \
+  --scope "$STORAGE_ACCOUNT_ID" >/dev/null
 
 echo "==> 5. Networking (VNet + Subnet)"
 az network vnet create \
