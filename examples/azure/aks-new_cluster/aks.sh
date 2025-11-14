@@ -23,20 +23,10 @@ SYSTEM_COUNT="3"
 USER_POOL_VM_SIZE="Standard_NC24ads_A100_v4"
 USER_POOLS="${USER_POOLS:-gpu}"
 USER_POOL_COUNT="${USER_POOL_COUNT:-1}"
-TAGS="${TAGS:-SkipASB_Audit=true}"
-
-# ===== TAGS TO CLI FORMAT =====
-tag_args=(--tags)
-IFS=',' read -r -a tag_items <<<"$TAGS"
-for kv in "${tag_items[@]}"; do
-  # Skip empty entries defensively
-  [[ -z "$kv" ]] && continue
-  tag_args+=("$kv")
-done
 
 echo "==> 1. Resource Group"
 az account set -s "$SUBSCRIPTION"
-az group create --name "$RESOURCE_GROUP" --location "$LOCATION" "${tag_args[@]}"
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
 echo "==> 2. Storage Account + Container"
 az storage account create \
@@ -45,8 +35,7 @@ az storage account create \
   --location "$LOCATION" \
   --sku Standard_LRS \
   --kind StorageV2 \
-  --allow-blob-public-access false \
-  "${tag_args[@]}"
+  --allow-blob-public-access false
 
 az storage container create \
   --name "$STORAGE_CONTAINER" \
@@ -65,7 +54,7 @@ az storage cors add \
   --max-age 600
 
 echo "==> 3. User Assigned Identity"
-IDENTITY_JSON=$(az identity create -g "$RESOURCE_GROUP" -n "$USER_IDENTITY_NAME" "${tag_args[@]}")
+IDENTITY_JSON=$(az identity create -g "$RESOURCE_GROUP" -n "$USER_IDENTITY_NAME")
 # IDENTITY_JSON=$(az identity show -g "$RESOURCE_GROUP" -n "$USER_IDENTITY_NAME")
 IDENTITY_CLIENT_ID=$(echo "$IDENTITY_JSON" | jq -r '.clientId')
 IDENTITY_PRINCIPAL_ID=$(echo "$IDENTITY_JSON" | jq -r '.principalId')
@@ -84,8 +73,7 @@ az network vnet create \
   --location "$LOCATION" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$VNET_NAME" \
-  --address-prefixes "$VNET_CIDR" \
-  "${tag_args[@]}"
+  --address-prefixes "$VNET_CIDR"
 
 az network vnet subnet create \
   --resource-group "$RESOURCE_GROUP" \
@@ -99,16 +87,14 @@ az network public-ip create \
   --resource-group "$RESOURCE_GROUP" \
   --name "$NAT_PIP_NAME" \
   --sku Standard \
-  --allocation-method Static \
-  "${tag_args[@]}"
+  --allocation-method Static
 
 az network nat gateway create \
   --location "$LOCATION" \
   --resource-group "$RESOURCE_GROUP" \
   --name "$NAT_GW_NAME" \
   --public-ip-addresses "$NAT_PIP_NAME" \
-  --idle-timeout 10 \
-  "${tag_args[@]}"
+  --idle-timeout 10
 
 az network vnet subnet update \
   --resource-group "$RESOURCE_GROUP" \
@@ -133,7 +119,6 @@ az aks create \
   --outbound-type userAssignedNATGateway \
   --vnet-subnet-id "$SUBNET_ID" \
   --nodepool-name sys \
-  --nodepool-tags "${TAGS// /,}" \
   --node-count "$SYSTEM_COUNT" \
   --node-vm-size "$SYSTEM_VM_SIZE"
 
@@ -163,8 +148,7 @@ for pool in $USER_POOLS; do
     --node-vm-size "$USER_POOL_VM_SIZE" \
     --labels node.anyscale.com/capacity-type=SPOT \
     --priority Spot \
-    --node-taints node.anyscale.com/capacity-type=SPOT:NoSchedule \
-    --tags "${TAGS// /,}"
+    --node-taints node.anyscale.com/capacity-type=SPOT:NoSchedule
 done
 
 echo "==> 10. Install ingress-controller, device-plugin and anyscale-operator"
