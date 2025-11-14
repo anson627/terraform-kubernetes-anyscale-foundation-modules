@@ -1,0 +1,10 @@
+workloads:
+  instanceTypes:
+    additional:
+      1xA100:
+        resources:
+          CPU: 20
+          GPU: 1
+          memory: 200Gi
+          accelerators:
+            - A100-80G

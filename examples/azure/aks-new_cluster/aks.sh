@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # ===== CONFIG =====
-SUBSCRIPTION="${SUBSCRIPTION:-c0d4b923-b5ea-4f8f-9b56-5390a9bf2248}"
-RESOURCE_GROUP="${RESOURCE_GROUP:-aks-multi-region-rg}"
-STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-aksmultiregionsa}"
-STORAGE_CONTAINER="${STORAGE_CONTAINER:-aks-multi-region-blob}"
-USER_IDENTITY_NAME="${USER_IDENTITY_NAME:-aks-multi-region-anyscale-operator-mi}"
+SUBSCRIPTION="${SUBSCRIPTION:-3eaeebff-de6e-4e20-9473-24de9ca067dc}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-aks-anyscale-rg}"
+STORAGE_ACCOUNT="${STORAGE_ACCOUNT:-aksanyscalesa}"
+STORAGE_CONTAINER="${STORAGE_CONTAINER:-aks-anyscale-blob}"
+USER_IDENTITY_NAME="${USER_IDENTITY_NAME:-aks-anyscale-operator-mi}"
 
-LOCATION="${LOCATION:-eastus}"
+LOCATION="${LOCATION:-uksouth}"
 AKS_CLUSTER_NAME="${AKS_CLUSTER_NAME:-aks-$LOCATION}"
 VNET_NAME="${VNET_NAME:-${AKS_CLUSTER_NAME}-vnet}"
 VNET_CIDR="10.192.0.0/10"
@@ -18,12 +18,12 @@ POD_CIDR="10.128.0.0/11"
 NAT_PIP_NAME="${NAT_PIP_NAME:-${AKS_CLUSTER_NAME}-nat-pip}"
 NAT_GW_NAME="${NAT_GW_NAME:-${AKS_CLUSTER_NAME}-nat-gw}"
 AKS_VERSION="${AKS_VERSION:-1.33.3}"
-SYSTEM_VM_SIZE="Standard_D16_v5"
+SYSTEM_VM_SIZE="Standard_D8ds_v6"
 SYSTEM_COUNT="3"
 USER_POOL_VM_SIZE="Standard_NC24ads_A100_v4"
 USER_POOLS="${USER_POOLS:-gpu}"
-USER_POOL_COUNT="${USER_POOL_COUNT:-3}"
-TAGS="${TAGS:-deletion_due_time=2025-11-17T00:00:00Z,SkipAKSCluster=1,SkipASB_Audit=true}"
+USER_POOL_COUNT="${USER_POOL_COUNT:-1}"
+TAGS="${TAGS:-SkipASB_Audit=true}"
 
 # ===== TAGS TO CLI FORMAT =====
 tag_args=(--tags)
@@ -48,12 +48,9 @@ done
 #   --allow-blob-public-access false \
 #   "${tag_args[@]}"
 
-# SA_KEY=$(az storage account keys list -g "$RESOURCE_GROUP" -n "$STORAGE_ACCOUNT" --query '[0].value' -o tsv)
-
 # az storage container create \
 #   --name "$STORAGE_CONTAINER" \
 #   --account-name "$STORAGE_ACCOUNT" \
-#   --account-key "$SA_KEY" \
 #   --public-access off >/dev/null
 
 # echo "==> 3. User Assigned Identity"
@@ -155,7 +152,7 @@ for pool in $USER_POOLS; do
     --tags "${TAGS// /,}"
 done
 
-echo "==> 10. Install ingress controller"
+echo "==> 10. Install ingress-controller, device-plugin and anyscale-operator"
 az aks get-credentials -g $RESOURCE_GROUP -n $AKS_CLUSTER_NAME --overwrite-existing
 
 helm repo add nginx https://kubernetes.github.io/ingress-nginx
@@ -166,16 +163,23 @@ helm upgrade ingress-nginx nginx/ingress-nginx \
   --create-namespace \
   --install
   
+helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
+helm upgrade nvdp nvdp/nvidia-device-plugin \
+  --namespace nvidia-device-plugin \
+  --version 0.17.1 \
+  --values sample-values_nvdp.yaml \
+  --create-namespace \
+  --install
+  
 helm repo add anyscale https://anyscale.github.io/helm-charts
 helm repo update
-
-ANYSCALE_CLI_TOKEN="aph0_CkgwRgIhAPsWK5X-_YExKmea9blodb6P-MRBI6vqbTD6kfKRiybIAiEA2XB8VsXMEjXlbVmVc0sHqzj8sRcRi9m_9G8xf66NUDsSYxIgpOw-Cm7cYDWxuseSE3XepzyoWwMNv9NnmqEV3MLj7GEYASIedXNyX2FicHNjNzQ1bGo3ZWNzYmVienBwcGQ0ZWp5OgwI6f6tyAYQwL6CowJCDAi9h4nIBhDAvoKjAvIBAA"
 helm upgrade anyscale-operator anyscale/anyscale-operator \
-  --set-string global.cloudDeploymentId=cldrsrc_si6emilxuqeuhthzftxr3yk55a  \
+  --set-string global.cloudDeploymentId=cldrsrc_7a1az4q922g8iz3ey6vl51xwft  \
   --set-string global.cloudProvider=azure \
   --set-string global.auth.anyscaleCliToken=$ANYSCALE_CLI_TOKEN \
   --set-string global.auth.iamIdentity=$IDENTITY_CLIENT_ID \
   --set-string workloads.serviceAccount.name=anyscale-operator \
+  -f custom_values.yaml \
   --namespace anyscale-operator \
   --create-namespace \
   -i

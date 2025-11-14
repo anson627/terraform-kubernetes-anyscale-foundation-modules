@@ -111,18 +111,23 @@ You will need an Anyscale platform API Key for the helm chart installation. You 
 
 ```shell
 anyscale cloud register \
-  --name aks-multi-region \
+  --name ai4s-multi-region \
   --region eastus2 \
   --provider azure \
   --compute-stack k8s \
-  --cloud-storage-bucket-name 'azure://aks-multi-region-blob' \
-  --cloud-storage-bucket-endpoint 'https://aksmultiregionsa.blob.core.windows.net'
+  --cloud-storage-bucket-name 'azure://aks-anyscale-blob' \
+  --cloud-storage-bucket-endpoint 'https://aksanyscalesa.blob.core.windows.net'
 ```
 
 2. Note the Cloud Deployment ID which will be used in the next step. The Anyscale CLI will return it as one of the outputs. Example:
 ```shell
 Output
 (anyscale +22.5s) For registering this cloud's Kubernetes Manager, use cloud deployment ID 'cldrsrc_12345abcdefgh67890ijklmnop'.
+```
+
+3. Add new cluster to existing Anyscale cloud
+```shell
+anyscale cloud resource create --cloud ai4s-multi-region -f cloudresource.yaml
 ```
 
 ### Install the Anyscale Operator
