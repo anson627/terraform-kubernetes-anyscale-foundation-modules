@@ -13,6 +13,6 @@ tolerations:
   - key: node.anyscale.com/capacity-type
     operator: Exists
     effect: NoSchedule
-  - key: node.anyscale.com/accelerator-type
+  - key: kubernetes.azure.com/scalesetpriority
     operator: Exists
     effect: NoSchedule
